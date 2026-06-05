@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.positai
+
+# Rendered outputs (reproducible from .qmd source)
+CEO_Presentation_PPTX_files/
+CEO_Presentation_files/
+CEO_Customer_Report_files/
+*.knit.md

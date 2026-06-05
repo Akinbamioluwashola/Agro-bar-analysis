@@ -1,0 +1,314 @@
+---
+title: "Customer Database & Sales Team Analysis"
+subtitle: "Record-Keeping & Account Management Report"
+author: "Data Analysis Team"
+date: "June 05, 2026"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
+    number-sections: true
+    theme: flatly
+    embed-resources: true
+    fig-align: center
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(knitr)
+
+shola_clean        <- readRDS("shola_clean.rds")
+ian_detail         <- readRDS("ian_detail.rds")
+peter_detail       <- readRDS("peter_detail.rds")
+city_summary       <- readRDS("city_summary.rds")
+rep_region         <- readRDS("rep_region.rds")
+rep_summary_export <- readRDS("rep_summary_export.rds")
+```
+
+## Executive Summary
+
+This report presents the findings from a full audit of the company's customer
+database. The analysis covers **2,273 verified customer records** across
+**31 active sales representatives** and **20+ regions** nationwide.
+
+::: {.callout-important}
+## Three Actions Requiring Immediate CEO Attention
+
+1. **441 customers (19.4% of the base)** are managed by just two reps — Ian and
+   Peter — with no backup or succession plan in place.
+2. **341 customers** are assigned to a placeholder entry called *"Customer Office"*
+   and have no named sales representative.
+3. **Address and contact data gaps** exist across the database — 9.3% of customers
+   have no street address and 4.7% have no phone number.
+:::
+
+---
+
+## Dataset Overview
+
+### Cleaning Summary
+
+The raw database required significant cleaning before analysis. The table below
+summarises what was found and what was done.
+
+```{r}
+#| label: tbl-cleaning
+#| tbl-cap: "Data Cleaning Steps Applied to Raw Database"
+tibble::tribble(
+  ~Step,  ~Issue,                                          ~Action,
+  "1",  "Metadata rows at top of file",                  "Removed 5 header/metadata rows",
+  "2",  "Incorrect column names",                        "Set correct names from row 5",
+  "3",  "Mixed-case text in all columns",                "Trimmed whitespace; applied title case to rep names",
+  "4",  "3 near-empty columns (100% / 99.6% missing)",   "Dropped Address Line 2, Address Line 3, Post Code",
+  "5",  "Fax Number 70% missing",                        "Dropped Fax Number column",
+  "6",  "6 junk rows (Hebrew text, notes, no customer ID)", "Removed non-customer rows",
+  "7",  "3 suspect sales rep entries (dummy IDs, Hebrew placeholders)", "Removed כללי, Oded, DR MUSILIU AGBOOLA",
+  "8",  "Remaining rows with any missing value",          "Removed; 2,273 complete records retained"
+) |>
+  kable(col.names = c("Step", "Issue Found", "Action Taken"))
+```
+
+### Final Dataset Dimensions
+
+```{r}
+#| label: tbl-dims
+#| tbl-cap: "Final Clean Dataset at a Glance"
+tibble::tribble(
+  ~Metric,               ~Value,
+  "Total customer records",   "2,273",
+  "Columns retained",         "7",
+  "Active sales reps",        "31",
+  "Regions covered",          "20+",
+  "Missing values remaining", "0"
+) |>
+  kable(col.names = c("Metric", "Value"))
+```
+
+---
+
+## Sales Team Analysis
+
+### Customers Per Sales Representative
+
+@fig-rep-count shows the number of customers each sales representative currently
+manages, ranked from highest to lowest.
+
+```{r}
+#| label: fig-rep-count
+#| fig-cap: "Number of customers managed per sales representative (all reps)"
+#| fig-height: 8
+shola_clean |>
+  count(`Sales Rep Name`, sort = TRUE) |>
+  ggplot(aes(x = n, y = reorder(`Sales Rep Name`, n))) +
+  geom_col() +
+  geom_text(aes(label = n), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(x = "Number of Customers", y = NULL)
+```
+
+::: {.callout-note}
+## Key Observations
+
+- **"Customer Office"** (341 customers) is a placeholder — not a real rep.
+  These accounts are effectively unmanaged.
+- **Ian (232) and Peter (209)** carry the heaviest legitimate workloads,
+  each managing roughly twice the number of customers of any other rep.
+- **5 reps manage only 1 customer each** — these should be verified as active.
+:::
+
+### Workload Distribution — Real Reps Only
+
+```{r}
+#| label: fig-rep-count-clean
+#| fig-cap: "Customer count per rep — excluding 'Customer Office' placeholder"
+#| fig-height: 8
+shola_clean |>
+  filter(`Sales Rep Name` != "Customer Office") |>
+  count(`Sales Rep Name`, sort = TRUE) |>
+  ggplot(aes(x = n, y = reorder(`Sales Rep Name`, n))) +
+  geom_col() +
+  geom_text(aes(label = n), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(x = "Number of Customers", y = NULL)
+```
+
+---
+
+## Geographic Distribution
+
+### Where Are Our Customers?
+
+@fig-geo shows how customers are distributed across cities and states nationwide,
+after consolidating inconsistent location entries from the raw database.
+
+```{r}
+#| label: fig-geo
+#| fig-cap: "Customer distribution by location — top 20 cities / states"
+#| fig-height: 7
+ggplot(city_summary, aes(x = n, y = reorder(location, n))) +
+  geom_col() +
+  geom_text(aes(label = n), hjust = -0.2, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(x = "Number of Customers", y = NULL)
+```
+
+::: {.callout-note}
+## Geographic Highlights
+
+- **Ibadan / Oyo** is the dominant market with 711 customers — nearly 3× the
+  next largest location.
+- **Ogun State (236), Lagos (197), and Kaduna (158)** form the next tier.
+- Southern and middle-belt states hold 70–95 customers each, suggesting broad
+  national reach but thin coverage outside the South-West.
+:::
+
+---
+
+## Regional Coverage by Sales Rep
+
+@fig-heatmap maps which reps are active in which regions, using the top 10
+locations and top 15 reps. Darker cells indicate more customers.
+
+```{r}
+#| label: fig-heatmap
+#| fig-cap: "Sales rep coverage heatmap — top 10 regions × top 15 reps"
+#| fig-height: 7
+#| fig-width: 12
+ggplot(rep_region,
+       aes(x = `Sales Rep Name`, y = reorder(location, n, sum), fill = n)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = ifelse(n > 0, n, "")), size = 2.8, color = "white") +
+  scale_fill_gradient(low = "#d4e6f1", high = "#1a5276", name = "Customers") +
+  labs(x = NULL, y = NULL) +
+  theme(
+    axis.text.x  = element_text(angle = 40, hjust = 1, size = 8),
+    axis.text.y  = element_text(size = 9)
+  )
+```
+
+::: {.callout-warning}
+## Territory Overlap Concerns
+
+- Most regions have **multiple reps sharing the same territory** with no clear
+  ownership — creating confusion and duplicated effort.
+- **Peter** is the only rep active across 6+ regions, creating a single point
+  of failure for the South-West.
+- **Ian** dominates the entire South-East corridor across 31 regions.
+:::
+
+---
+
+## Key Account Management Risks {#sec-risks}
+
+### Risk Overview
+
+```{r}
+#| label: tbl-risk
+#| tbl-cap: "Ian vs Peter — Side-by-Side Risk Comparison"
+tibble::tribble(
+  ~Metric,                          ~Ian,                        ~Peter,
+  "Total customers managed",        "232",                       "209",
+  "Regions covered",                "31",                        "22",
+  "Regions with only 1 customer",   "13",                        "13",
+  "Largest single region",          "Enugu — 51 (22%)",          "Ibadan — 115 (55%)",
+  "Portfolio concentration",        "Low (evenly spread)",       "High (Ibadan-heavy)",
+  "Geographic coherence",           "Strong (South-East corridor)", "Weak (scattered)",
+  "Succession difficulty",          "Very High",                 "High"
+) |>
+  kable(col.names = c("Metric", "Ian", "Peter"))
+```
+
+### Ian — Regional Spread
+
+```{r}
+#| label: fig-ian
+#| fig-cap: "Ian — 232 customers across 31 regions"
+#| fig-height: 9
+ggplot(ian_detail, aes(x = n, y = reorder(location, n))) +
+  geom_col() +
+  geom_text(aes(label = paste0(n, "  (", Pct, "%)")), hjust = -0.1, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.25))) +
+  labs(
+    subtitle = "232 customers | 31 regions | South-East corridor specialist",
+    x = "Number of Customers", y = NULL
+  )
+```
+
+::: {.callout-important}
+## Ian Risk Summary
+
+Ian is the business's largest rep by customer count. His portfolio spans
+**31 regions** — the widest of any rep — with **no dominant anchor region**
+(largest region: Enugu at only 22%). If Ian left, accounts would need to be
+redistributed across 31 different regions simultaneously, making him the
+**highest succession risk** in the business.
+:::
+
+### Peter — Regional Spread
+
+```{r}
+#| label: fig-peter
+#| fig-cap: "Peter — 209 customers across 22 regions"
+#| fig-height: 9
+ggplot(peter_detail, aes(x = n, y = reorder(location, n))) +
+  geom_col() +
+  geom_text(aes(label = paste0(n, "  (", Pct, "%)")), hjust = -0.1, size = 3) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.25))) +
+  labs(
+    subtitle = "209 customers | 22 regions | 55% concentrated in Ibadan/Oyo",
+    x = "Number of Customers", y = NULL
+  )
+```
+
+::: {.callout-important}
+## Peter Risk Summary
+
+Peter manages **115 customers in Ibadan/Oyo alone** — the business's single
+largest market (55% of his portfolio). He is also the de facto owner of this
+territory. Losing Peter would mean the largest customer hub in the database
+loses its primary relationship manager overnight. His 13 single-customer
+outlier regions (including Ghana, Kaduna, Benue) are geographically incoherent
+and likely receiving minimal attention.
+:::
+
+---
+
+## Priority Action Plan for the CEO
+
+```{r}
+#| label: tbl-actions
+#| tbl-cap: "Recommended Actions — Prioritised for CEO"
+tibble::tribble(
+  ~Priority, ~Action,                                                                   ~Owner,           ~Timeline,
+  "1",       "Identify a South-East deputy for Ian across his core 5 regions",          "CEO / HR",       "Immediate",
+  "2",       "Identify a named backup rep for Peter's 115 Ibadan/Oyo accounts",         "CEO / HR",       "Immediate",
+  "3",       "Assign the 341 'Customer Office' accounts to named sales reps",           "Sales Manager",  "Within 1 week",
+  "4",       "Redistribute Ian and Peter's 26 combined single-customer outlier regions","Sales Manager",  "Within 2 weeks",
+  "5",       "Cap both Ian and Peter's portfolios at 150 accounts",                     "Sales Manager",  "Within 1 month",
+  "6",       "Define formal territory maps for all 31 reps",                            "Sales Manager",  "Within 1 month",
+  "7",       "Fill missing street address and phone number gaps (9.3% and 4.7%)",       "Admin Team",     "Within 1 month"
+) |>
+  kable(col.names = c("Priority", "Action", "Owner", "Suggested Timeline"))
+```
+
+---
+
+## Appendix — Full Sales Rep Summary
+
+```{r}
+#| label: tbl-reps-full
+#| tbl-cap: "All Sales Representatives — Customer Count and Notes"
+rep_summary_export |>
+  kable(col.names = c("Rank", "Rep No.", "Sales Rep Name", "Customer Count", "Note"))
+```
+
+---
+
+*Report prepared by the Data Analysis Team | Data current as of 05 June 2026*
+*Source: shola_clean.xlsx — 2,273 verified customer records*

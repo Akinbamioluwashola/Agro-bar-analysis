@@ -1,0 +1,326 @@
+---
+title: "Customer & Sales Rep Analysis"
+subtitle: "Agro Bar Magen Nigeria LTD"
+author: "Akinbami Oluwashola"
+date: "June 2026"
+format: pptx
+execute:
+  echo: false
+  warning: false
+  message: false
+  fig-width: 9
+  fig-height: 5
+---
+
+```{r}
+#| label: load-packages
+library(tidyverse)
+library(readxl)
+library(knitr)
+library(scales)
+```
+
+```{r}
+#| label: load-data
+shola_clean <- readRDS("shola_clean.rds")
+rep_summary <- readRDS("rep_summary_export.rds")
+city_summary <- readRDS("city_summary.rds")
+ian_detail <- readRDS("ian_detail.rds")
+peter_detail <- readRDS("peter_detail.rds")
+rep_region <- readRDS("rep_region.rds")
+```
+
+```{r}
+#| label: prepare-data
+total_customers <- nrow(shola_clean)
+total_reps <- n_distinct(shola_clean$`Sales Rep Name`, na.rm = TRUE)
+total_locations <- n_distinct(city_summary$location)
+
+overlap <- ian_detail |>
+  inner_join(peter_detail, by = "location", suffix = c("_ian", "_peter")) |>
+  rename(ian_n = n_ian, ian_pct = Pct_ian, peter_n = n_peter, peter_pct = Pct_peter) |>
+  mutate(combined_customers = ian_n + peter_n) |>
+  arrange(desc(combined_customers))
+
+overlap_ian <- sum(overlap$ian_n)
+overlap_peter <- sum(overlap$peter_n)
+```
+
+## Executive summary — Key numbers
+
+| Metric | Value |
+|:-------|------:|
+| Total customers on record | `{r} format(total_customers, big.mark = ",")` |
+| Active sales representatives | `{r} total_reps` |
+| Geographic locations covered | `{r} total_locations`+ |
+
+**Top 3 reps by customer count:**
+
+1. Customer Office — 341 customers (administrative allocation)
+2. **Ian** — 232 customers across 31 locations (widest geographic spread)
+3. **Peter** — 209 customers across 22 locations (heavily concentrated)
+
+## Key findings
+
+- **Geographic concentration:** Over 31% of all customers are in Ibadan/Oyo alone.
+- **Ian** has the widest territorial spread but moderate concentration — his top 3 locations hold ~54% of his portfolio.
+- **Peter** is heavily concentrated — Ibadan/Oyo alone holds **55%** of his customers.
+- Ian and Peter share **7 locations**, but actual competitive overlap is minimal — in each shared location, one rep dominates.
+- **Data quality:** 9.5% of customer records lack a street address; 4.9% are missing phone numbers.
+
+## Data source & scope
+
+**Source:** Company customer database export (Excel)
+
+**Scope:** All customers mapped to their assigned sales representatives.
+
+**Raw data:** 2,604 rows x 11 columns (all character type)
+
+**After cleaning:** `{r} format(total_customers, big.mark = ",")` rows x 7 columns
+
+**Cleaning steps applied:**
+
+- Removed header/metadata rows (company name, timestamp, report title)
+- Dropped near-empty columns (Address Line 2, State, Fax Number — ~100% missing)
+- Standardised sales rep names to consistent casing
+- Grouped cities/counties into cleaner location labels
+- Converted Customer Number and Sales Rep Number to numeric
+
+## Data quality summary
+
+| Column | Missing count | Missing % |
+|:-------|-----:|-----:|
+| Street Address | 247 | 9.5% |
+| Phone Number | 127 | 4.9% |
+| City/County | 126 | 4.8% |
+| Sales Rep Number | 11 | 0.4% |
+| Customer Number | 6 | 0.2% |
+| Customer Name | 0 | 0.0% |
+
+**Recommendation:** Prioritise filling in missing street addresses and phone numbers to improve customer reachability and delivery accuracy.
+
+## Top 20 customer locations
+
+```{r}
+#| label: fig-location-dist
+#| fig-cap: "Customer count by location (Top 20)"
+
+city_summary |>
+  mutate(location = fct_reorder(location, n)) |>
+  ggplot(aes(x = n, y = location)) +
+  geom_col(fill = "#1B5E20") +
+  geom_text(aes(label = n), hjust = -0.1, size = 3.5) +
+  labs(x = "Number of Customers", y = NULL) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank())
+```
+
+## Location analysis — Key takeaways
+
+- **Ibadan/Oyo dominates** with 711 customers (31% of all customers) — both an opportunity and a concentration risk.
+- **Top 5 locations** (Ibadan/Oyo, Ogun, Lagos, Kaduna, Ilorin/Kwara) account for roughly **62%** of all customers.
+- Southern Nigeria is heavily represented; northern presence is limited mainly to Kaduna and Kano.
+
+**Implications for leadership:**
+
+- Revenue is geographically concentrated — disruptions in Ibadan/Oyo would disproportionately affect the business.
+- There may be untapped growth opportunities in under-represented regions (e.g., Abuja/FCT, northern states).
+
+## Sales reps ranked by customer count (Top 15)
+
+```{r}
+#| label: fig-rep-ranking
+#| fig-cap: "Top 15 sales reps by customer count"
+
+rep_summary |>
+  head(15) |>
+  mutate(`Sales Rep Name` = fct_reorder(`Sales Rep Name`, `Customer Count`)) |>
+  ggplot(aes(x = `Customer Count`, y = `Sales Rep Name`)) +
+  geom_col(fill = "#1B5E20") +
+  geom_text(aes(label = `Customer Count`), hjust = -0.1, size = 3.5) +
+  labs(x = "Number of Customers", y = NULL) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank())
+```
+
+## Sales rep performance — Key takeaways
+
+- **Customer Office** (341 customers) is an administrative allocation, not a single sales rep.
+- **Ian (232) and Peter (209)** are the top two individual performers by customer count.
+- There is a steep drop-off after the top 5 reps: the **top 5 account for a disproportionate share** of the customer base.
+- **11 reps have fewer than 30 customers each** — these may be newer hires, part-time, or underperforming.
+
+**Recommendations:**
+
+- Investigate why Customer Office holds so many accounts — consider redistributing to named reps.
+- Review workload balance: top reps may be stretched too thin while others are underutilised.
+
+## Ian's customer distribution by location
+
+```{r}
+#| label: fig-ian-detail
+#| fig-cap: "Ian's 232 customers across 31 locations (Top 15 shown)"
+
+ian_detail |>
+  slice_max(n, n = 15) |>
+  mutate(location = fct_reorder(location, n)) |>
+  ggplot(aes(x = n, y = location)) +
+  geom_col(fill = "#1B5E20") +
+  geom_text(aes(label = paste0(n, " (", Pct, "%)")), hjust = -0.05, size = 3.5) +
+  labs(x = "Number of Customers", y = NULL) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.22))) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank())
+```
+
+## Ian — Analysis & risk assessment
+
+**Strengths:**
+
+- Widest geographic coverage of any rep — **31 locations**
+- No single location exceeds 22% of his portfolio
+- Strong presence across the South-East and South-South (Enugu, Delta, Rivers, Edo)
+
+**Risks:**
+
+- His top 3 locations (Enugu, Delta, Rivers/PH) hold ~54% of his customers — moderate concentration
+- Managing 31 locations may strain his ability to service all customers effectively
+- If Ian were to leave, the company would lose coverage in numerous locations simultaneously
+
+**Recommendations:**
+
+- Develop a succession plan for Ian's territory
+- Consider assigning a junior rep to shadow Ian in his top locations
+- Monitor customer satisfaction in Ian's lower-volume locations
+
+## Peter's customer distribution by location
+
+```{r}
+#| label: fig-peter-detail
+#| fig-cap: "Peter's 209 customers across 22 locations (Top 15 shown)"
+
+peter_detail |>
+  slice_max(n, n = 15) |>
+  mutate(location = fct_reorder(location, n)) |>
+  ggplot(aes(x = n, y = location)) +
+  geom_col(fill = "#C8902E") +
+  geom_text(aes(label = paste0(n, " (", Pct, "%)")), hjust = -0.05, size = 3.5) +
+  labs(x = "Number of Customers", y = NULL) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.22))) +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank())
+```
+
+## Peter — Analysis & risk assessment
+
+**Strengths:**
+
+- Second-highest individual customer count (209)
+- Dominant presence in the company's largest market — Ibadan/Oyo
+
+**Critical risk — Geographic concentration:**
+
+- **55% of Peter's customers** are in Ibadan/Oyo alone
+- His top 2 locations (Ibadan/Oyo + Ogun) account for **72%** of his portfolio
+- If Peter loses access to Ibadan/Oyo (e.g., he relocates, becomes ill, or resigns), 115 customers are immediately at risk
+
+**Recommendations:**
+
+- **Urgent:** Assign a backup rep for Ibadan/Oyo to reduce single-person dependency
+- Gradually redistribute some Ibadan/Oyo accounts to reduce Peter's concentration
+- Encourage Peter to develop his presence in less-saturated markets
+
+## Ian vs Peter — Side-by-side top 10 locations
+
+```{r}
+#| label: fig-ian-peter-compare
+#| fig-cap: "Top 10 locations for Ian and Peter (side by side)"
+
+ian_top <- ian_detail |> slice_max(n, n = 10) |> mutate(rep = "Ian")
+peter_top <- peter_detail |> slice_max(n, n = 10) |> mutate(rep = "Peter")
+
+bind_rows(ian_top, peter_top) |>
+  mutate(location = fct_reorder(location, n, .fun = sum)) |>
+  ggplot(aes(x = n, y = location, fill = rep)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("Ian" = "#1B5E20", "Peter" = "#C8902E")) +
+  labs(x = "Number of Customers", y = NULL, fill = "Sales Rep") +
+  theme_minimal(base_size = 13) +
+  theme(panel.grid.major.y = element_blank(),
+        legend.position = "top")
+```
+
+## Ian vs Peter — Comparison summary
+
+| Metric | Ian | Peter |
+|:-------|----:|------:|
+| Total customers | 232 | 209 |
+| Locations covered | 31 | 22 |
+| Top location share | 22% (Enugu) | 55% (Ibadan/Oyo) |
+| Top 3 locations share | ~54% | ~81% |
+
+**Key contrast:** Ian is a *spread* rep — wide coverage, moderate concentration. Peter is a *depth* rep — deep penetration in fewer markets. Both strategies have merit, but Peter's concentration poses higher business continuity risk.
+
+## Overlap analysis
+
+Ian and Peter share **7 locations** out of 46 unique locations combined.
+
+```{r}
+#| label: tbl-overlap
+
+overlap |>
+  select(Location = location,
+         `Ian (n)` = ian_n, `Ian (%)` = ian_pct,
+         `Peter (n)` = peter_n, `Peter (%)` = peter_pct) |>
+  kable(align = c("l", "r", "r", "r", "r"))
+```
+
+- `{r} round(overlap_ian / 232 * 100, 1)`% of Ian's customers and `{r} round(overlap_peter / 209 * 100, 1)`% of Peter's customers fall in shared locations.
+- **However, actual competitive overlap is minimal** — in each shared location, one rep dominates while the other has only 1–3 customers.
+
+## Concentration risk summary
+
+| Risk factor | Severity | Affected customers |
+|:------------|:--------:|---------:|
+| Peter's Ibadan/Oyo concentration | **HIGH** | 115 |
+| Company-wide Ibadan/Oyo dependence | **HIGH** | 711 |
+| Ian's broad but thin coverage | **MEDIUM** | 232 |
+| Customer Office unassigned accounts | **MEDIUM** | 341 |
+| Data quality gaps (addresses, phones) | **MEDIUM** | 247+ records |
+| Bottom 11 reps with <30 customers | LOW | <330 combined |
+
+## Recommendations — Immediate (0–3 months)
+
+1. Assign a backup rep for **Peter's Ibadan/Oyo territory** to mitigate single-person dependency.
+
+2. Audit the **341 Customer Office accounts** — redistribute to named sales reps.
+
+3. Launch a **data cleanup initiative** to fill missing addresses and phone numbers.
+
+## Recommendations — Medium-term (3–6 months)
+
+4. Develop a **succession plan for Ian** — his 31-location coverage is a key-person risk.
+
+5. **Rebalance workloads** — top reps are overloaded while others are underutilised.
+
+6. Evaluate underperforming reps (fewer than 30 customers) for coaching or reassignment.
+
+## Recommendations — Strategic (6–12 months)
+
+7. Explore **geographic expansion** into under-served northern regions.
+
+8. Implement a **CRM system** for better territory management and reporting.
+
+## Thank you
+
+**Customer & Sales Rep Analysis**
+
+Prepared by: **Akinbami Oluwashola**
+
+For: **Agro Bar Magen Nigeria LTD**
+
+June 2026
+
+*Questions or feedback? Please reach out to the analyst.*
