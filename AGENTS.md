@@ -79,13 +79,9 @@ The raw Excel file has a messy header (company name, timestamp, report title in 
 ## Version Control (Git)
 
 - **Initialised:** Yes — local Git repo with one commit (`82dd95f`).
-- **Remote:** Not yet configured. To push to GitHub, create a repo on GitHub and run:
-  ```bash
-  git remote add origin https://github.com/<USERNAME>/<REPO>.git
-  git push -u origin main
-  ```
+- **Remote:** `https://github.com/Akinbamioluwashola/Agro-bar-analysis.git`
 - **`.gitignore`** excludes `.Rproj.user`, `.Rhistory`, `.RData`, `.Ruserdata`, `.positai`, rendered `_files/` directories, and `*.knit.md`.
-- **Branch:** `main` (default).
+- **Branch:** `master`.
 
 ### Plots (PNG)
 - `Customer_Distribution_by_Location.png` — top locations bar chart
